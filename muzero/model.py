@@ -64,7 +64,8 @@ class MuModel():
     x = s_k = Input(self.S_DIM)
     x = Dense(32)(x)
     x = Activation('elu')(x)
-    p_k = Dense(a_dim, name='p_k')(x)
+    p_k = Dense(a_dim)(x)
+    p_k = Activation('softmax', name='p_k')(p_k)
     v_k = Dense(1, name='v_k')(x)
     self.f = Model(s_k, [p_k, v_k], name="f")
 
@@ -75,12 +76,12 @@ class MuModel():
     return self.h.predict(np.array(o_0)[None])[0]
 
   def gt(self, s_km1, a_k):
-    r_k, s_k = self.g.predict([s_km1[None], a_k[None]])
-    return r_k[0], s_k[0]
+    r_k, s_k = self.g.predict([s_km1[None], to_one_hot(a_k, self.a_dim)[None]])
+    return r_k[0][0], s_k[0]
 
   def ft(self, s_k):
     p_k, v_k = self.f.predict(s_k[None])
-    return p_k[0], v_k[0]
+    return p_k[0], v_k[0][0]
 
   def train_on_batch(self, batch):
     X,Y = reformat_batch(batch, self.a_dim)
