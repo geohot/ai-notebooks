@@ -97,11 +97,11 @@ def get_mcts_policy(m, observation, num_simulations=10):
       min_max_stats.update(node.value())
       value = node.reward + discount * value
 
-  # select the action
+  # output the final policy
   visit_counts = [(action, child.visit_count) for action, child in root.children.items()]
   visit_counts = [x[1] for x in sorted(visit_counts)]
-  policy = np.array(visit_counts).astype(np.float32)
-  policy /= np.sum(policy)
+  av = np.array(visit_counts).astype(np.float32)
+  policy = np.exp(av)/sum(np.exp(av))
 
   return policy, root
 
