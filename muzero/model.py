@@ -15,10 +15,10 @@ def bstack(bb):
       ret[j].append(bb[i][j])
   return [np.array(x) for x in ret]
 
-def reformat_batch(batch):
+def reformat_batch(batch, a_dim):
   X,Y = [], []
   for o,a,outs in batch:
-    x = [o] + [to_one_hot(x,2) for x in a]
+    x = [o] + [to_one_hot(x, a_dim) for x in a]
     y = []
     for ll in [list(x) for x in outs]:
       y += ll
@@ -83,7 +83,7 @@ class MuModel():
     return p_k[0], v_k[0]
 
   def train_on_batch(self, batch):
-    X,Y = reformat_batch(batch)
+    X,Y = reformat_batch(batch, self.a_dim)
     l = self.mu.train_on_batch(X,Y)
     self.losses.append(l)
     return l

@@ -9,13 +9,14 @@ class Game():
     self.rewards = []
     self.discount = 0.95
     self.done = False
+    self.observation = env.reset()
 
   def terminal(self):
     return self.done
 
   def apply(self, a_1):
-    self.observations.append(np.copy(self.env.state))
-    _, r_1, done, _ = self.env.step(a_1)
+    self.observations.append(np.copy(self.observation))
+    self.observation, r_1, done, _ = self.env.step(a_1)
 
     self.history.append(a_1)
     self.rewards.append(r_1)
@@ -38,7 +39,7 @@ class Game():
         last_reward = 0
 
       # TODO: policy is useless without MCTS
-      targets.append((value, last_reward, [0.5, 0.5]))
+      targets.append((value, last_reward, [0.5] * self.env.action_space.n))
     return targets 
 
 class ReplayBuffer():
