@@ -22,6 +22,8 @@ pb_c_base = 19652
 pb_c_init = 1.25
 
 discount = 0.95
+root_dirichlet_alpha = 0.25
+root_exploration_fraction = 0.25
 
 class MinMaxStats(object):
   """A class that holds the min-max values of the tree."""
@@ -42,20 +44,23 @@ class MinMaxStats(object):
 
 # The score for a node is based on its value, plus an exploration bonus based on
 # the prior.
-def ucb_score(parent: Node, child: Node, min_max_stats: MinMaxStats) -> float:
+def ucb_score(parent: Node, child: Node, min_max_stats=None) -> float:
   pb_c = math.log((parent.visit_count + pb_c_base + 1) / pb_c_base) + pb_c_init
   pb_c *= math.sqrt(parent.visit_count) / (child.visit_count + 1)
 
   prior_score = pb_c * child.prior
   if child.visit_count > 0:
-    value_score = child.reward + discount * min_max_stats.normalize(child.value())
+    if min_max_stats is not None:
+      value_score = child.reward + discount * min_max_stats.normalize(child.value())
+    else:
+      value_score = child.reward + discount * child.value()
   else:
     value_score = 0
 
   #print(prior_score, value_score)
   return prior_score + value_score
 
-def select_child(node: Node, min_max_stats):
+def select_child(node: Node, min_max_stats=None):
   _, action, child = max(
       (ucb_score(node, child, min_max_stats), action, child) for action, child in node.children.items())
   return action, child
@@ -64,19 +69,28 @@ def get_mcts_policy(m, observation, num_simulations=10):
   # init the root node
   root = Node(0, m.ht(observation), 0)
   policy, value = m.ft(root.hidden_state)
+
+  # expand the children of the root node
   for i in range(policy.shape[0]):
     reward, hidden_state = m.gt(root.hidden_state, 0)
     root.children[i] = Node(policy[i], hidden_state, reward)
 
+  # add exploration noise at the root
+  actions = list(root.children.keys())
+  noise = np.random.dirichlet([root_dirichlet_alpha] * len(actions))
+  frac = root_exploration_fraction
+  for a, n in zip(actions, noise):
+    root.children[a].prior = root.children[a].prior * (1 - frac) + n * frac
+
   # run_mcts
-  min_max_stats = MinMaxStats()
+  #min_max_stats = MinMaxStats()
   for _ in range(num_simulations):
     history = []
     node = root
     search_path = [node]
 
     while node.expanded():
-      action, node = select_child(node, min_max_stats)
+      action, node = select_child(node) #, min_max_stats)
       history.append(action)
       search_path.append(node)
 
@@ -94,13 +108,13 @@ def get_mcts_policy(m, observation, num_simulations=10):
     for node in reversed(search_path):
       node.value_sum += value
       node.visit_count += 1
-      min_max_stats.update(node.value())
+      #min_max_stats.update(node.value())
       value = node.reward + discount * value
 
   # output the final policy
   visit_counts = [(action, child.visit_count) for action, child in root.children.items()]
   visit_counts = [x[1] for x in sorted(visit_counts)]
-  av = np.array(visit_counts).astype(np.float32)
+  av = np.array(visit_counts).astype(np.float64)
   policy = np.exp(av)/sum(np.exp(av))
 
   return policy, root
