@@ -1,4 +1,5 @@
 import math
+import random
 import numpy as np
 
 class Node(object):
@@ -61,11 +62,12 @@ def ucb_score(parent: Node, child: Node, min_max_stats=None) -> float:
   return prior_score + value_score
 
 def select_child(node: Node, min_max_stats=None):
-  _, action, child = max(
-      (ucb_score(node, child, min_max_stats), action, child) for action, child in node.children.items())
+  out = [(ucb_score(node, child, min_max_stats), action, child) for action, child in node.children.items()]
+  # this max is why it favors 1's over 0's
+  _, action, child = max(out)
   return action, child
 
-def get_mcts_policy(m, observation, num_simulations=10):
+def mcts_search(m, observation, num_simulations=10):
   # init the root node
   root = Node(0, m.ht(observation), 0)
   policy, value = m.ft(root.hidden_state)
@@ -83,14 +85,14 @@ def get_mcts_policy(m, observation, num_simulations=10):
     root.children[a].prior = root.children[a].prior * (1 - frac) + n * frac
 
   # run_mcts
-  #min_max_stats = MinMaxStats()
+  min_max_stats = MinMaxStats()
   for _ in range(num_simulations):
     history = []
     node = root
     search_path = [node]
 
     while node.expanded():
-      action, node = select_child(node) #, min_max_stats)
+      action, node = select_child(node, min_max_stats)
       history.append(action)
       search_path.append(node)
 
@@ -108,7 +110,7 @@ def get_mcts_policy(m, observation, num_simulations=10):
     for node in reversed(search_path):
       node.value_sum += value
       node.visit_count += 1
-      #min_max_stats.update(node.value())
+      min_max_stats.update(node.value())
       value = node.reward + discount * value
 
   # output the final policy
@@ -118,4 +120,54 @@ def get_mcts_policy(m, observation, num_simulations=10):
   policy = np.exp(av)/sum(np.exp(av))
 
   return policy, root
+
+def print_tree(x, hist=[]):
+  print(x.value(), x, hist)
+  for i,c in x.children.items():
+    print_tree(c, hist+[i])
+
+def get_action_space(K, n):
+  def to_one_hot(x,n):
+    ret = np.zeros([n])
+    ret[x] = 1.0
+    return ret
+  import itertools
+  aopts = list(itertools.product(list(range(n)), repeat=K))
+  aoptss = np.array([[to_one_hot(x, n) for x in aa] for aa in aopts])
+  aoptss = aoptss.swapaxes(0,1)
+  aoptss = [aoptss[x] for x in range(K)]
+  return aopts,aoptss
+
+# TODO: this is naive search, replace with MCTS
+aspace = {}
+def naive_search(m, o_0, debug=False):
+  K,n = m.K, m.a_dim
+  if (K,n) not in aspace:
+    aspace[(K,n)] = get_action_space(K, n)
+  aopts,aoptss = aspace[(K,n)]
+
+  # concatenate the current state with every possible action
+  o_0s = np.repeat(np.array(o_0)[None], len(aopts), axis=0)
+  ret = m.mu.predict([o_0s]+aoptss)
+  v_s = ret[-3]
+  
+  minimum = min(v_s)
+  maximum = max(v_s)
+  v_s = (v_s - minimum) / (maximum - minimum)
+  
+  # group the value with the action rollout that caused it
+  v = [(v_s[i][0], aopts[i]) for i in range(len(v_s))]
+  if debug:
+    print(sorted(v, reverse=True))
+  
+  av = [0] * n
+  for vk, ak in v:
+    av[ak[0]] += vk
+
+  av = np.array(av).astype(np.float64)
+  
+  #print(av)
+  
+  policy = np.exp(av)/sum(np.exp(av))
+  return policy
 

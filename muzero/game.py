@@ -2,13 +2,13 @@ import numpy as np
 import random
 
 class Game():
-  def __init__(self, env):
+  def __init__(self, env, discount=0.95):
     self.env = env
     self.observations = []
     self.history = []
     self.rewards = []
     self.policies = []
-    self.discount = 0.95
+    self.discount = discount
     self.done = False
     self.observation = env.reset()
 
@@ -48,9 +48,10 @@ class Game():
     return targets 
 
 class ReplayBuffer():
-  def __init__(self, window_size, batch_size):
+  def __init__(self, window_size, batch_size, num_unroll_steps):
     self.window_size = window_size
     self.batch_size = batch_size
+    self.num_unroll_steps = num_unroll_steps
     self.buffer = []
 
   def save_game(self, game):
@@ -58,11 +59,11 @@ class ReplayBuffer():
       self.buffer.pop(0)
     self.buffer.append(game)
 
-  def sample_batch(self, num_unroll_steps: int):
+  def sample_batch(self):
     games = [self.sample_game() for _ in range(self.batch_size)]
     game_pos = [(g, self.sample_position(g)) for g in games]
-    return [(g.make_image(i), g.history[i:i + num_unroll_steps],
-             g.make_target(i, num_unroll_steps))
+    return [(g.make_image(i), g.history[i:i + self.num_unroll_steps],
+             g.make_target(i, self.num_unroll_steps))
              for (g, i) in game_pos]
 
   def sample_game(self):
@@ -70,7 +71,7 @@ class ReplayBuffer():
 
   def sample_position(self, game):
 		# have to do -5 to allow enough actions
-    return random.randint(0, len(game.history)-1-5)
+    return random.randint(0, len(game.history)-1-self.num_unroll_steps)
 
 
 

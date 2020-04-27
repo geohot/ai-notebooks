@@ -30,10 +30,7 @@ def reformat_batch(batch, a_dim):
   return X,Y
 
 class MuModel():
-  # the dimension of the internal state
-  S_DIM = 8
-
-  def __init__(self, o_dim, a_dim):
+  def __init__(self, o_dim, a_dim, s_dim=8, K=5):
     self.o_dim = o_dim
     self.a_dim = a_dim
     self.losses = []
@@ -43,25 +40,25 @@ class MuModel():
     x = o_0 = Input(o_dim)
     x = Dense(64)(x)
     x = Activation('elu')(x)
-    s_0 = Dense(self.S_DIM, name='s_0')(x)
+    s_0 = Dense(s_dim, name='s_0')(x)
     self.h = Model(o_0, s_0, name="h")
 
     # g: dynamics function (recurrent in state?) old_state+action -> state+reward
     # r_k, s_k = g(s_k-1, a_k)
-    s_km1 = Input(self.S_DIM)
+    s_km1 = Input(s_dim)
     a_k = Input(a_dim)
     x = Concatenate()([s_km1, a_k])
     x = Dense(64)(x)
     x = Activation('elu')(x)
     x = Dense(64)(x)
     x = Activation('elu')(x)
-    s_k = Dense(self.S_DIM, name='s_k')(x)
+    s_k = Dense(s_dim, name='s_k')(x)
     r_k = Dense(1, name='r_k')(x)
     self.g = Model([s_km1, a_k], [r_k, s_k], name="g")
 
     # f: prediction function -- state -> policy+value
     # p_k, v_k = f(s_k)
-    x = s_k = Input(self.S_DIM)
+    x = s_k = Input(s_dim)
     x = Dense(32)(x)
     x = Activation('elu')(x)
     p_k = Dense(a_dim)(x)
@@ -70,7 +67,7 @@ class MuModel():
     self.f = Model(s_k, [p_k, v_k], name="f")
 
     # combine them all
-    self.create_mu()
+    self.create_mu(K)
 
   def ht(self, o_0):
     return self.h.predict(np.array(o_0)[None])[0]
@@ -90,6 +87,7 @@ class MuModel():
     return l
 
   def create_mu(self, K=5):
+    self.K = K
     # represent
     o_0 = Input(self.o_dim, name="o_0")
     s_km1 = self.h(o_0)
