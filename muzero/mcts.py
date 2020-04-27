@@ -140,7 +140,7 @@ def get_action_space(K, n):
 
 # TODO: this is naive search, replace with MCTS
 aspace = {}
-def naive_search(m, o_0, debug=False):
+def naive_search(m, o_0, debug=False, T=1):
   K,n = m.K, m.a_dim
   if (K,n) not in aspace:
     aspace[(K,n)] = get_action_space(K, n)
@@ -164,10 +164,20 @@ def naive_search(m, o_0, debug=False):
   for vk, ak in v:
     av[ak[0]] += vk
 
-  av = np.array(av).astype(np.float64)
+  av = np.array(av).astype(np.float64) / T
   
   #print(av)
   
   policy = np.exp(av)/sum(np.exp(av))
   return policy
+
+def get_values(m, o_0):
+	hidden_state = m.ht(o_0)
+	vs = []
+	for n in range(m.a_dim):
+		_, ht2 = m.gt(hidden_state, n)
+		_, v = m.ft(ht2)
+		vs.append(v)
+	return vs
+
 

@@ -11,6 +11,7 @@ class Game():
     self.discount = discount
     self.done = False
     self.observation = env.reset()
+    self.total_reward = 0
 
   def terminal(self):
     return self.done
@@ -21,6 +22,7 @@ class Game():
 
     self.history.append(a_1)
     self.rewards.append(r_1)
+    self.total_reward += r_1
     self.policies.append(p)
 
     self.done = done
@@ -68,9 +70,18 @@ class ReplayBuffer():
 
   def sample_game(self):
     return random.choice(self.buffer)
+    """
+    # priority sampling?
+    pp = np.array([x.total_reward for x in self.buffer])
+    pp -= np.min(pp)
+    pp /= np.sum(pp)
+    ret = np.random.choice(self.buffer, p=pp)
+    return ret
+    """
+
 
   def sample_position(self, game):
-		# have to do -5 to allow enough actions
+		# have to do -num_unroll_steps to allow enough actions
     return random.randint(0, len(game.history)-1-self.num_unroll_steps)
 
 

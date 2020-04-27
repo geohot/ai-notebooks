@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 from tensorflow.keras.models import Model
+from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.layers import *
 
 def to_one_hot(x,n):
@@ -30,7 +31,10 @@ def reformat_batch(batch, a_dim):
   return X,Y
 
 class MuModel():
-  def __init__(self, o_dim, a_dim, s_dim=8, K=5):
+  LAYER_COUNT = 4
+  LAYER_DIM = 128
+
+  def __init__(self, o_dim, a_dim, s_dim=8, K=5, lr=0.001):
     self.o_dim = o_dim
     self.a_dim = a_dim
     self.losses = []
@@ -38,8 +42,8 @@ class MuModel():
     # h: representation function
     # s_0 = h(o_1...o_t)
     x = o_0 = Input(o_dim)
-    x = Dense(64)(x)
-    x = Activation('elu')(x)
+    for _ in range(self.LAYER_COUNT):
+      x = Dense(self.LAYER_DIM, activation='elu')(x)
     s_0 = Dense(s_dim, name='s_0')(x)
     self.h = Model(o_0, s_0, name="h")
 
@@ -48,10 +52,8 @@ class MuModel():
     s_km1 = Input(s_dim)
     a_k = Input(a_dim)
     x = Concatenate()([s_km1, a_k])
-    x = Dense(64)(x)
-    x = Activation('elu')(x)
-    x = Dense(64)(x)
-    x = Activation('elu')(x)
+    for _ in range(self.LAYER_COUNT):
+      x = Dense(self.LAYER_DIM, activation='elu')(x)
     s_k = Dense(s_dim, name='s_k')(x)
     r_k = Dense(1, name='r_k')(x)
     self.g = Model([s_km1, a_k], [r_k, s_k], name="g")
@@ -59,15 +61,15 @@ class MuModel():
     # f: prediction function -- state -> policy+value
     # p_k, v_k = f(s_k)
     x = s_k = Input(s_dim)
-    x = Dense(32)(x)
-    x = Activation('elu')(x)
+    for _ in range(self.LAYER_COUNT):
+      x = Dense(self.LAYER_DIM, activation='elu')(x)
     p_k = Dense(a_dim)(x)
     p_k = Activation('softmax', name='p_k')(p_k)
     v_k = Dense(1, name='v_k')(x)
     self.f = Model(s_k, [p_k, v_k], name="f")
 
     # combine them all
-    self.create_mu(K)
+    self.create_mu(K, lr)
 
   def ht(self, o_0):
     return self.h.predict(np.array(o_0)[None])[0]
@@ -86,7 +88,7 @@ class MuModel():
     self.losses.append(l)
     return l
 
-  def create_mu(self, K=5):
+  def create_mu(self, K, lr):
     self.K = K
     # represent
     o_0 = Input(self.o_dim, name="o_0")
@@ -113,6 +115,6 @@ class MuModel():
       s_km1 = s_k
 
     mu = Model([o_0] + a_all, mu_all)
-    mu.compile('adam', loss_all)
+    mu.compile(Adam(lr), loss_all)
     self.mu = mu
 
