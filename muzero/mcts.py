@@ -111,10 +111,7 @@ def mcts_search(m, observation, num_simulations=10):
 
     # use the model to estimate the policy and value, use policy as prior
     policy, value = m.ft(node.hidden_state)
-
-    # our model outputs value of 1 for white winning and -1 for black winning
-    # TODO: do we need to change this?
-    value *= -node.to_play
+    #print(history, value)
 
     # create all the children of the newly expanded node
     for i in range(policy.shape[0]):
@@ -123,7 +120,7 @@ def mcts_search(m, observation, num_simulations=10):
 
     # update the state with "backpropagate"
     for bnode in reversed(search_path):
-      bnode.value_sum += value if search_path[-1].to_play == bnode.to_play else -value
+      bnode.value_sum += value if root.to_play == bnode.to_play else -value
       bnode.visit_count += 1
       #min_max_stats.update(node.value())
       value = bnode.reward + discount * value
@@ -144,7 +141,8 @@ def mcts_search(m, observation, num_simulations=10):
   return policy, root
 
 def print_tree(x, hist=[]):
-  print("%3d %4d %-16s %8.4f %4d" % (x.to_play, x.visit_count, str(hist), x.value(), x.reward))
+  if x.visit_count != 0:
+    print("%3d %4d %-16s %8.4f %4d" % (x.to_play, x.visit_count, str(hist), x.value(), x.reward))
   for i,c in x.children.items():
     print_tree(c, hist+[i])
 
