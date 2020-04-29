@@ -82,14 +82,12 @@ def mcts_search(m, observation, num_simulations=10):
     root.children[i] = Node(policy[i])
     root.children[i].to_play = -root.to_play
 
-  """
   # add exploration noise at the root
   actions = list(root.children.keys())
   noise = np.random.dirichlet([root_dirichlet_alpha] * len(actions))
   frac = root_exploration_fraction
   for a, n in zip(actions, noise):
     root.children[a].prior = root.children[a].prior * (1 - frac) + n * frac
-  """
 
   # run_mcts
   #min_max_stats = MinMaxStats()

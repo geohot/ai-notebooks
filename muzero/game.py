@@ -47,11 +47,10 @@ class Game():
         last_reward = 0
 
       if current_index < len(self.policies):
-        policy = self.policies[current_index] 
+        targets.append((value, last_reward, self.policies[current_index]))
       else:
-        policy = self.policies[len(self.policies)-1]
-
-      targets.append((value, last_reward, policy))
+        # no policy, what does cross entropy do? hopefully not learn
+        targets.append((0, last_reward, np.array([0]*len(self.policies[0]))))
     return targets 
 
 class ReplayBuffer():
@@ -69,12 +68,13 @@ class ReplayBuffer():
   def sample_batch(self):
     games = [self.sample_game() for _ in range(self.batch_size)]
     game_pos = [(g, self.sample_position(g)) for g in games]
-    def xtend(x,n):
-      # TODO: this is low quality code
-      while len(x) < n:
-        x += [x[-1]]
+    def xtend(g,x,s):
+      # pick the last (fake) action
+      while len(x) < s:
+        x.append(random.randint(0, len(g.policies[0])-1))
+        #x.append(len(g.policies[0])-1)
       return x
-    return [(g.make_image(i), xtend(g.history[i:i + self.num_unroll_steps], self.num_unroll_steps),
+    return [(g.make_image(i), xtend(g,g.history[i:i + self.num_unroll_steps], self.num_unroll_steps),
              g.make_target(i, self.num_unroll_steps))
              for (g, i) in game_pos]
 

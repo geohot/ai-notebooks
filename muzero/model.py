@@ -50,7 +50,7 @@ class MuModel():
     # g: dynamics function (recurrent in state?) old_state+action -> state+reward
     # r_k, s_k = g(s_k-1, a_k)
     s_km1 = Input(s_dim)
-    a_k = Input(a_dim)
+    a_k = Input(self.a_dim)
     x = Concatenate()([s_km1, a_k])
     for _ in range(self.LAYER_COUNT):
       x = Dense(self.LAYER_DIM, activation='elu')(x)
@@ -63,7 +63,7 @@ class MuModel():
     x = s_k = Input(s_dim)
     for _ in range(self.LAYER_COUNT):
       x = Dense(self.LAYER_DIM, activation='elu')(x)
-    p_k = Dense(a_dim)(x)
+    p_k = Dense(self.a_dim)(x)
     p_k = Activation('softmax', name='p_k')(p_k)
     v_k = Dense(1, name='v_k')(x)
     self.f = Model(s_k, [p_k, v_k], name="f")
