@@ -46,7 +46,12 @@ class Game():
       else:
         last_reward = 0
 
-      targets.append((value, last_reward, self.policies[current_index]))
+      if current_index < len(self.policies):
+        policy = self.policies[current_index] 
+      else:
+        policy = self.policies[len(self.policies)-1]
+
+      targets.append((value, last_reward, policy))
     return targets 
 
 class ReplayBuffer():
@@ -64,7 +69,12 @@ class ReplayBuffer():
   def sample_batch(self):
     games = [self.sample_game() for _ in range(self.batch_size)]
     game_pos = [(g, self.sample_position(g)) for g in games]
-    return [(g.make_image(i), g.history[i:i + self.num_unroll_steps],
+    def xtend(x,n):
+      # TODO: this is low quality code
+      while len(x) < n:
+        x += [x[-1]]
+      return x
+    return [(g.make_image(i), xtend(g.history[i:i + self.num_unroll_steps], self.num_unroll_steps),
              g.make_target(i, self.num_unroll_steps))
              for (g, i) in game_pos]
 
@@ -81,8 +91,8 @@ class ReplayBuffer():
 
 
   def sample_position(self, game):
-		# have to do -num_unroll_steps to allow enough actions
-    return random.randint(0, len(game.history)-1-self.num_unroll_steps)
+    # have to do -num_unroll_steps to allow enough actions
+    return random.randint(0, len(game.history)-1)
 
 
 

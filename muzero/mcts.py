@@ -3,13 +3,14 @@ import random
 import numpy as np
 
 class Node(object):
-  def __init__(self, prior: float, hidden_state, reward):
+  def __init__(self, prior: float):
     self.visit_count = 0
     self.prior = prior
     self.value_sum = 0
     self.children = {}
-    self.hidden_state = hidden_state
-    self.reward = reward
+    self.hidden_state = None
+    self.reward = 0
+    self.to_play = -1
 
   def expanded(self) -> bool:
     return len(self.children) > 0
@@ -63,66 +64,87 @@ def ucb_score(parent: Node, child: Node, min_max_stats=None) -> float:
 
 def select_child(node: Node, min_max_stats=None):
   out = [(ucb_score(node, child, min_max_stats), action, child) for action, child in node.children.items()]
+  smax = max([x[0] for x in out])
   # this max is why it favors 1's over 0's
-  _, action, child = max(out)
+  _, action, child = random.choice(list(filter(lambda x: x[0] == smax, out)))
   return action, child
 
 def mcts_search(m, observation, num_simulations=10):
   # init the root node
-  root = Node(0, m.ht(observation), 0)
+  root = Node(0)
+  root.hidden_state = m.ht(observation)
+  # TODO: only sometimes
+  root.to_play = observation[-1]
   policy, value = m.ft(root.hidden_state)
 
   # expand the children of the root node
   for i in range(policy.shape[0]):
-    reward, hidden_state = m.gt(root.hidden_state, 0)
-    root.children[i] = Node(policy[i], hidden_state, reward)
+    root.children[i] = Node(policy[i])
+    root.children[i].to_play = -root.to_play
 
+  """
   # add exploration noise at the root
   actions = list(root.children.keys())
   noise = np.random.dirichlet([root_dirichlet_alpha] * len(actions))
   frac = root_exploration_fraction
   for a, n in zip(actions, noise):
     root.children[a].prior = root.children[a].prior * (1 - frac) + n * frac
+  """
 
   # run_mcts
-  min_max_stats = MinMaxStats()
+  #min_max_stats = MinMaxStats()
   for _ in range(num_simulations):
     history = []
     node = root
     search_path = [node]
 
+    # traverse down the tree according to the ucb_score 
     while node.expanded():
-      action, node = select_child(node, min_max_stats)
+      #action, node = select_child(node, min_max_stats)
+      action, node = select_child(node)
       history.append(action)
       search_path.append(node)
 
-    # now we are at a leaf which is not "expanded"
+    # now we are at a leaf which is not "expanded", run the dynamics model
     parent = search_path[-2]
-    reward, hidden_state = m.gt(parent.hidden_state, history[-1])
+    node.reward, node.hidden_state = m.gt(parent.hidden_state, history[-1])
 
-    policy, value = m.ft(hidden_state)
-    #print(policy)
+    # use the model to estimate the policy and value, use policy as prior
+    policy, value = m.ft(node.hidden_state)
+
+    # our model outputs value of 1 for white winning and -1 for black winning
+    # TODO: do we need to change this?
+    value *= -node.to_play
+
+    # create all the children of the newly expanded node
     for i in range(policy.shape[0]):
-      reward, hidden_state = m.gt(node.hidden_state, 0)
-      node.children[i] = Node(policy[i], hidden_state, reward)
+      node.children[i] = Node(prior=policy[i])
+      node.children[i].to_play = -node.to_play
 
     # update the state with "backpropagate"
-    for node in reversed(search_path):
-      node.value_sum += value
-      node.visit_count += 1
-      min_max_stats.update(node.value())
-      value = node.reward + discount * value
+    for bnode in reversed(search_path):
+      bnode.value_sum += value if search_path[-1].to_play == bnode.to_play else -value
+      bnode.visit_count += 1
+      #min_max_stats.update(node.value())
+      value = bnode.reward + discount * value
 
   # output the final policy
   visit_counts = [(action, child.visit_count) for action, child in root.children.items()]
   visit_counts = [x[1] for x in sorted(visit_counts)]
   av = np.array(visit_counts).astype(np.float64)
-  policy = np.exp(av)/sum(np.exp(av))
-
+  #print(av)
+  #policy = av
+  #print(av)
+  #policy = av/sum(av)
+  #print(av)
+  def softmax(x):
+    e_x = np.exp(x - np.max(x))
+    return e_x / e_x.sum()
+  policy = softmax(av)
   return policy, root
 
 def print_tree(x, hist=[]):
-  print(x.value(), x, hist)
+  print("%3d %4d %-16s %8.4f %4d" % (x.to_play, x.visit_count, str(hist), x.value(), x.reward))
   for i,c in x.children.items():
     print_tree(c, hist+[i])
 
@@ -165,9 +187,7 @@ def naive_search(m, o_0, debug=False, T=1):
     av[ak[0]] += vk
 
   av = np.array(av).astype(np.float64) / T
-  
   #print(av)
-  
   policy = np.exp(av)/sum(np.exp(av))
   return policy
 
