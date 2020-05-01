@@ -2,6 +2,10 @@ import math
 import random
 import numpy as np
 
+def softmax(x):
+  e_x = np.exp(x - np.max(x))
+  return e_x / e_x.sum()
+
 class Node(object):
   def __init__(self, prior: float):
     self.visit_count = 0
@@ -69,12 +73,12 @@ def select_child(node: Node, min_max_stats=None):
   _, action, child = random.choice(list(filter(lambda x: x[0] == smax, out)))
   return action, child
 
-def mcts_search(m, observation, num_simulations=10):
+def mcts_search(m, observation, num_simulations=10, minimax=True):
   # init the root node
   root = Node(0)
   root.hidden_state = m.ht(observation)
-  # TODO: only sometimes
-  root.to_play = observation[-1]
+  if minimax:
+    root.to_play = observation[-1]
   policy, value = m.ft(root.hidden_state)
 
   # expand the children of the root node
@@ -118,7 +122,10 @@ def mcts_search(m, observation, num_simulations=10):
 
     # update the state with "backpropagate"
     for bnode in reversed(search_path):
-      bnode.value_sum += value if root.to_play == bnode.to_play else -value
+      if minimax:
+        bnode.value_sum += value if root.to_play == bnode.to_play else -value
+      else:
+        bnode.value_sum += value
       bnode.visit_count += 1
       #min_max_stats.update(node.value())
       value = bnode.reward + discount * value
@@ -127,14 +134,6 @@ def mcts_search(m, observation, num_simulations=10):
   visit_counts = [(action, child.visit_count) for action, child in root.children.items()]
   visit_counts = [x[1] for x in sorted(visit_counts)]
   av = np.array(visit_counts).astype(np.float64)
-  #print(av)
-  #policy = av
-  #print(av)
-  #policy = av/sum(av)
-  #print(av)
-  def softmax(x):
-    e_x = np.exp(x - np.max(x))
-    return e_x / e_x.sum()
   policy = softmax(av)
   return policy, root
 
@@ -183,8 +182,7 @@ def naive_search(m, o_0, debug=False, T=1):
     av[ak[0]] += vk
 
   av = np.array(av).astype(np.float64) / T
-  #print(av)
-  policy = np.exp(av)/sum(np.exp(av))
+  policy = softmax(av)
   return policy
 
 def get_values(m, o_0):

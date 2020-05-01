@@ -6,7 +6,8 @@ from tensorflow.keras.layers import *
 
 def to_one_hot(x,n):
   ret = np.zeros([n])
-  ret[x] = 1.0
+  if x >= 0:
+    ret[x] = 1.0
   return ret
 
 def bstack(bb):
@@ -42,7 +43,7 @@ class MuModel():
     # h: representation function
     # s_0 = h(o_1...o_t)
     x = o_0 = Input(o_dim)
-    for _ in range(self.LAYER_COUNT):
+    for i in range(self.LAYER_COUNT):
       x = Dense(self.LAYER_DIM, activation='elu')(x)
     s_0 = Dense(s_dim, name='s_0')(x)
     self.h = Model(o_0, s_0, name="h")
@@ -52,7 +53,7 @@ class MuModel():
     s_km1 = Input(s_dim)
     a_k = Input(self.a_dim)
     x = Concatenate()([s_km1, a_k])
-    for _ in range(self.LAYER_COUNT):
+    for i in range(self.LAYER_COUNT):
       x = Dense(self.LAYER_DIM, activation='elu')(x)
     s_k = Dense(s_dim, name='s_k')(x)
     r_k = Dense(1, name='r_k')(x)
@@ -61,7 +62,7 @@ class MuModel():
     # f: prediction function -- state -> policy+value
     # p_k, v_k = f(s_k)
     x = s_k = Input(s_dim)
-    for _ in range(self.LAYER_COUNT):
+    for i in range(self.LAYER_COUNT):
       x = Dense(self.LAYER_DIM, activation='elu')(x)
     p_k = Dense(self.a_dim)(x)
     p_k = Activation('softmax', name='p_k')(p_k)

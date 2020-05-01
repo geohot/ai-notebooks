@@ -71,8 +71,9 @@ class ReplayBuffer():
     def xtend(g,x,s):
       # pick the last (fake) action
       while len(x) < s:
-        x.append(random.randint(0, len(g.policies[0])-1))
+        #x.append(random.randint(0, len(g.policies[0])-1))
         #x.append(len(g.policies[0])-1)
+        x.append(-1)
       return x
     return [(g.make_image(i), xtend(g,g.history[i:i + self.num_unroll_steps], self.num_unroll_steps),
              g.make_target(i, self.num_unroll_steps))
