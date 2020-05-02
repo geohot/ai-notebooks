@@ -17,7 +17,7 @@ def bstack(bb):
       ret[j].append(bb[i][j])
   return [np.array(x) for x in ret]
 
-def reformat_batch(batch, a_dim):
+def reformat_batch(batch, a_dim, remove_policy=False):
   X,Y = [], []
   for o,a,outs in batch:
     x = [o] + [to_one_hot(x, a_dim) for x in a]
@@ -28,7 +28,14 @@ def reformat_batch(batch, a_dim):
     Y.append(y)
   X = bstack(X)
   Y = bstack(Y)
-  Y = [Y[0]] + Y[2:]
+  if remove_policy:
+    nY = [Y[0]]
+    for i in range(3, len(Y), 3):
+      nY.append(Y[i])
+      nY.append(Y[i+1])
+    Y = nY
+  else:
+    Y = [Y[0]] + Y[2:]
   return X,Y
 
 class MuModel():
@@ -36,10 +43,11 @@ class MuModel():
   LAYER_DIM = 128
   BN = False
 
-  def __init__(self, o_dim, a_dim, s_dim=8, K=5, lr=0.001):
+  def __init__(self, o_dim, a_dim, s_dim=8, K=5, lr=0.001, with_policy=True):
     self.o_dim = o_dim
     self.a_dim = a_dim
     self.losses = []
+    self.with_policy = with_policy
 
     # h: representation function
     # s_0 = h(o_1...o_t)
@@ -71,9 +79,13 @@ class MuModel():
       x = Dense(self.LAYER_DIM, activation='elu')(x)
       if i != self.LAYER_COUNT-1 and self.BN:
         x = BatchNormalization()(x)
-    p_k = Dense(self.a_dim, name='p_k')(x)
     v_k = Dense(1, name='v_k')(x)
-    self.f = Model(s_k, [p_k, v_k], name="f")
+
+    if self.with_policy:
+      p_k = Dense(self.a_dim, name='p_k')(x)
+      self.f = Model(s_k, [p_k, v_k], name="f")
+    else:
+      self.f = Model(s_k, v_k, name="f")
 
     # combine them all
     self.create_mu(K, lr)
@@ -86,11 +98,14 @@ class MuModel():
     return r_k[0][0], s_k[0]
 
   def ft(self, s_k):
-    p_k, v_k = self.f.predict(s_k[None])
-    return np.exp(p_k[0]), v_k[0][0]
+    if self.with_policy:
+      p_k, v_k = self.f.predict(s_k[None])
+      return np.exp(p_k[0]), v_k[0][0]
+    else:
+      return [1/a_dim]*a_dim, v_k[0][0]
 
   def train_on_batch(self, batch):
-    X,Y = reformat_batch(batch, self.a_dim)
+    X,Y = reformat_batch(batch, self.a_dim, not self.with_policy)
     l = self.mu.train_on_batch(X,Y)
     self.losses.append(l)
     return l
@@ -107,21 +122,32 @@ class MuModel():
       return tf.nn.softmax_cross_entropy_with_logits_v2(y_true, y_pred)
 
     # run f on the first state
-    p_km1, v_km1 = self.f([s_km1])
-    mu_all += [v_km1, p_km1]
-    loss_all += ["mse", softmax_ce_logits]
+    if self.with_policy:
+      p_km1, v_km1 = self.f([s_km1])
+      mu_all += [v_km1, p_km1]
+      loss_all += ["mse", softmax_ce_logits]
+    else:
+      v_km1 = self.f([s_km1])
+      mu_all += [v_km1]
+      loss_all += ["mse"]
 
     for k in range(K):
       a_k = Input(self.a_dim, name="a_%d" % k)
+      a_all.append(a_k)
+
       r_k, s_k = self.g([s_km1, a_k])
 
-      # predict
-      p_k, v_k = self.f([s_k])
-
-      # store
-      a_all.append(a_k)
-      mu_all += [v_k, r_k, p_k]
-      loss_all += ["mse", "mse", softmax_ce_logits]
+      # predict + store
+      if self.with_policy:
+        p_k, v_k = self.f([s_k])
+        mu_all += [v_k, r_k, p_k]
+        loss_all += ["mse", "mse", softmax_ce_logits]
+      else:
+        v_k = self.f([s_k])
+        mu_all += [v_k, r_k]
+        loss_all += ["mse", "mse"]
+      
+      # passback
       s_km1 = s_k
 
     mu = Model([o_0] + a_all, mu_all)
