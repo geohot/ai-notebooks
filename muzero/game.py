@@ -65,8 +65,8 @@ class ReplayBuffer():
       self.buffer.pop(0)
     self.buffer.append(game)
 
-  def sample_batch(self):
-    games = [self.sample_game() for _ in range(self.batch_size)]
+  def sample_batch(self, bs=None):
+    games = [self.sample_game() for _ in range(self.batch_size if bs is None else bs)]
     game_pos = [(g, self.sample_position(g)) for g in games]
     def xtend(g,x,s):
       # pick the last (fake) action

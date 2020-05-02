@@ -34,6 +34,7 @@ def reformat_batch(batch, a_dim):
 class MuModel():
   LAYER_COUNT = 4
   LAYER_DIM = 128
+  BN = False
 
   def __init__(self, o_dim, a_dim, s_dim=8, K=5, lr=0.001):
     self.o_dim = o_dim
@@ -45,6 +46,8 @@ class MuModel():
     x = o_0 = Input(o_dim)
     for i in range(self.LAYER_COUNT):
       x = Dense(self.LAYER_DIM, activation='elu')(x)
+      if i != self.LAYER_COUNT-1 and self.BN:
+        x = BatchNormalization()(x)
     s_0 = Dense(s_dim, name='s_0')(x)
     self.h = Model(o_0, s_0, name="h")
 
@@ -55,6 +58,8 @@ class MuModel():
     x = Concatenate()([s_km1, a_k])
     for i in range(self.LAYER_COUNT):
       x = Dense(self.LAYER_DIM, activation='elu')(x)
+      if i != self.LAYER_COUNT-1 and self.BN:
+        x = BatchNormalization()(x)
     s_k = Dense(s_dim, name='s_k')(x)
     r_k = Dense(1, name='r_k')(x)
     self.g = Model([s_km1, a_k], [r_k, s_k], name="g")
@@ -64,8 +69,9 @@ class MuModel():
     x = s_k = Input(s_dim)
     for i in range(self.LAYER_COUNT):
       x = Dense(self.LAYER_DIM, activation='elu')(x)
-    p_k = Dense(self.a_dim)(x)
-    p_k = Activation('softmax', name='p_k')(p_k)
+      if i != self.LAYER_COUNT-1 and self.BN:
+        x = BatchNormalization()(x)
+    p_k = Dense(self.a_dim, name='p_k')(x)
     v_k = Dense(1, name='v_k')(x)
     self.f = Model(s_k, [p_k, v_k], name="f")
 
@@ -81,7 +87,7 @@ class MuModel():
 
   def ft(self, s_k):
     p_k, v_k = self.f.predict(s_k[None])
-    return p_k[0], v_k[0][0]
+    return np.exp(p_k[0]), v_k[0][0]
 
   def train_on_batch(self, batch):
     X,Y = reformat_batch(batch, self.a_dim)
@@ -97,10 +103,13 @@ class MuModel():
 
     a_all, mu_all, loss_all = [], [], []
 
+    def softmax_ce_logits(y_true, y_pred):
+      return tf.nn.softmax_cross_entropy_with_logits_v2(y_true, y_pred)
+
     # run f on the first state
     p_km1, v_km1 = self.f([s_km1])
     mu_all += [v_km1, p_km1]
-    loss_all += ["mse", "categorical_crossentropy"]
+    loss_all += ["mse", softmax_ce_logits]
 
     for k in range(K):
       a_k = Input(self.a_dim, name="a_%d" % k)
@@ -112,7 +121,7 @@ class MuModel():
       # store
       a_all.append(a_k)
       mu_all += [v_k, r_k, p_k]
-      loss_all += ["mse", "mse", "categorical_crossentropy"]
+      loss_all += ["mse", "mse", softmax_ce_logits]
       s_km1 = s_k
 
     mu = Model([o_0] + a_all, mu_all)
