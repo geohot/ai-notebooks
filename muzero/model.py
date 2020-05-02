@@ -102,7 +102,8 @@ class MuModel():
       p_k, v_k = self.f.predict(s_k[None])
       return np.exp(p_k[0]), v_k[0][0]
     else:
-      return [1/a_dim]*a_dim, v_k[0][0]
+      v_k = self.f.predict(s_k[None])
+      return np.array([1/self.a_dim]*self.a_dim), v_k[0][0]
 
   def train_on_batch(self, batch):
     X,Y = reformat_batch(batch, self.a_dim, not self.with_policy)
