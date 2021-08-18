@@ -1,3 +1,7 @@
 .ipynb_checkpoints
 .*.swp
 *.pyc
+__pycache__
+.vscode/
+test.py
+venv/
