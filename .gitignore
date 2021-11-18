@@ -1,3 +1,5 @@
 .ipynb_checkpoints
 .*.swp
 *.pyc
+data
+lightning_logs
